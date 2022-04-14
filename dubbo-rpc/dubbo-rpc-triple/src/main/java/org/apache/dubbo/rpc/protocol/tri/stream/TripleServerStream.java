@@ -84,11 +84,11 @@ public class TripleServerStream extends AbstractStream implements ServerStream {
     private Deframer deframer;
 
     public TripleServerStream(Channel channel,
-        FrameworkModel frameworkModel,
-        Executor executor,
-        PathResolver pathResolver,
-        String acceptEncoding,
-        List<HeaderFilter> filters) {
+                              FrameworkModel frameworkModel,
+                              Executor executor,
+                              PathResolver pathResolver,
+                              String acceptEncoding,
+                              List<HeaderFilter> filters) {
         super(executor, frameworkModel);
         this.channel = channel;
         this.pathResolver = pathResolver;
@@ -334,13 +334,6 @@ public class TripleServerStream extends AbstractStream implements ServerStream {
                 return;
             }
 
-            if (path.charAt(0) != '/') {
-                responseErr(
-                    TriRpcStatus.UNIMPLEMENTED.withDescription(
-                        "Path must start with '/'. Request path: " + path));
-                return;
-            }
-
             String[] parts = path.split("/");
             if (parts.length != 3) {
                 responseErr(TriRpcStatus.UNIMPLEMENTED.withDescription("Bad path format:" + path));
@@ -353,6 +346,10 @@ public class TripleServerStream extends AbstractStream implements ServerStream {
             if (invoker == null) {
                 responseErr(
                     TriRpcStatus.UNIMPLEMENTED.withDescription("Service not found:" + serviceName));
+                return;
+            }
+
+            if (endStream) {
                 return;
             }
 
@@ -384,7 +381,8 @@ public class TripleServerStream extends AbstractStream implements ServerStream {
             Map<String, Object> requestMetadata = headersToMap(headers);
             boolean hasStub = pathResolver.hasNativeStub(path);
             if (hasStub) {
-                listener = new StubAbstractServerCall(invoker, TripleServerStream.this, frameworkModel,
+                listener = new StubAbstractServerCall(invoker, TripleServerStream.this,
+                    frameworkModel,
                     acceptEncoding, serviceName, originalMethodName, executor);
             } else {
                 listener = new ReflectionAbstractServerCall(invoker, TripleServerStream.this,
@@ -393,9 +391,6 @@ public class TripleServerStream extends AbstractStream implements ServerStream {
             }
             listener.onHeader(requestMetadata);
             if (listener == null) {
-                deframer.close();
-            }
-            if (endStream) {
                 deframer.close();
             }
         }
@@ -407,6 +402,9 @@ public class TripleServerStream extends AbstractStream implements ServerStream {
         }
 
         private void doOnData(ByteBuf data, boolean endStream) {
+            if (deframer == null) {
+                return;
+            }
             deframer.deframe(data);
             if (endStream) {
                 deframer.close();
@@ -419,6 +417,9 @@ public class TripleServerStream extends AbstractStream implements ServerStream {
             if (!trailersSent) {
                 // send rst if stream not closed
                 reset(Http2Error.valueOf(errorCode));
+            }
+            if (listener == null) {
+                return;
             }
             executor.execute(() -> {
                 listener.onCancelByRemote(TriRpcStatus.CANCELLED
