@@ -94,7 +94,7 @@
         <javassist_version>3.28.0-GA</javassist_version>
         <netty_version>3.2.5.Final</netty_version>
         <netty4_version>4.1.56.Final</netty4_version>
-        <mina_version>1.1.7</mina_version>
+        <mina_version>2.1.5</mina_version>
         <grizzly_version>2.4.4</grizzly_version>
         <httpclient_version>4.5.13</httpclient_version>
         <httpcore_version>4.4.6</httpcore_version>
@@ -130,7 +130,7 @@
         <envoy_api_version>0.1.23</envoy_api_version>
 
         <rs_api_version>2.0</rs_api_version>
-        <resteasy_version>3.0.19.Final</resteasy_version>
+        <resteasy_version>3.14.0.Final</resteasy_version>
         <tomcat_embed_version>8.5.69</tomcat_embed_version>
         <jetcd_version>0.5.3</jetcd_version>
         <nacos_version>2.0.4</nacos_version>
