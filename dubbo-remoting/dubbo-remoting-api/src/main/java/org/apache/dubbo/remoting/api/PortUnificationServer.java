@@ -24,7 +24,6 @@ import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.ExecutorUtil;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Constants;
-import org.apache.dubbo.remoting.utils.UrlUtils;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -34,11 +33,11 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.group.ChannelGroupFuture;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GlobalEventExecutor;
 
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -59,6 +58,10 @@ public class PortUnificationServer {
     private static final Logger logger = LoggerFactory.getLogger(PortUnificationServer.class);
     private final List<WireProtocol> protocols;
     private final URL url;
+
+    private final DefaultChannelGroup channels = new DefaultChannelGroup(
+        GlobalEventExecutor.INSTANCE);
+
     private final int serverShutdownTimeoutMills;
     /**
      * netty server bootstrap.
@@ -68,7 +71,6 @@ public class PortUnificationServer {
      * the boss channel that receive connections and dispatch these to worker channel.
      */
     private Channel channel;
-    private DefaultChannelGroup channelGroup;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
 
@@ -110,6 +112,13 @@ public class PortUnificationServer {
             getUrl().getPositiveParameter(IO_THREADS_KEY, Constants.DEFAULT_IO_THREADS),
             EVENT_LOOP_WORKER_POOL_NAME);
 
+        final boolean enableSsl = getUrl().getParameter(SSL_ENABLED_KEY, false);
+        final SslContext sslContext;
+        if (enableSsl) {
+            sslContext = SslContexts.buildServerSslContext(url);
+        } else {
+            sslContext = null;
+        }
         bootstrap.group(bossGroup, workerGroup)
             .channel(NettyEventLoopFactory.serverSocketChannelClass())
             .option(ChannelOption.SO_REUSEADDR, Boolean.TRUE)
@@ -118,24 +127,12 @@ public class PortUnificationServer {
             .childHandler(new ChannelInitializer<SocketChannel>() {
                 @Override
                 protected void initChannel(SocketChannel ch) throws Exception {
-                    // FIXME: should we use getTimeout()?
-                    int idleTimeout = UrlUtils.getIdleTimeout(getUrl());
+                    // Do not add idle state handler here, because it should be added in the protocol handler.
                     final ChannelPipeline p = ch.pipeline();
-//                        p.addLast(new LoggingHandler(LogLevel.DEBUG));
-
-                    final boolean enableSsl = getUrl().getParameter(SSL_ENABLED_KEY, false);
                     final PortUnificationServerHandler puHandler;
-                    if (enableSsl) {
-                        puHandler = new PortUnificationServerHandler(url,
-                            SslContexts.buildServerSslContext(url), true, protocols);
-                    } else {
-                        puHandler = new PortUnificationServerHandler(url, null, false, protocols);
-                    }
-
-                    p.addLast("server-idle-handler",
-                        new IdleStateHandler(0, 0, idleTimeout, MILLISECONDS));
+                    puHandler = new PortUnificationServerHandler(url, sslContext, true, protocols,
+                        channels);
                     p.addLast("negotiation-protocol", puHandler);
-                    channelGroup = puHandler.getChannels();
                 }
             });
         // bind
@@ -161,10 +158,7 @@ public class PortUnificationServer {
                 channel = null;
             }
 
-            if (channelGroup != null) {
-                ChannelGroupFuture closeFuture = channelGroup.close();
-                closeFuture.await(serverShutdownTimeoutMills);
-            }
+            channels.close().await(serverShutdownTimeoutMills);
             final long cost = System.currentTimeMillis() - st;
             logger.info("Port unification server closed. cost:" + cost);
         } catch (InterruptedException e) {
