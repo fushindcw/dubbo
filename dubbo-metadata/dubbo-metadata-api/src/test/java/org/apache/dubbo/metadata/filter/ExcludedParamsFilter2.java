@@ -14,28 +14,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alibaba.dubbo.registry.support;
+package org.apache.dubbo.metadata.filter;
 
-import org.apache.dubbo.common.URL;
-import org.apache.dubbo.registry.Registry;
+import org.apache.dubbo.common.extension.Activate;
+import org.apache.dubbo.metadata.MetadataParamsFilter;
 
-import com.alibaba.dubbo.registry.RegistryFactory;
+import static org.apache.dubbo.common.constants.CommonConstants.SIDE_KEY;
+import static org.apache.dubbo.rpc.Constants.DEPRECATED_KEY;
 
-/**
- * 2019-04-16
- */
-@Deprecated
-public abstract class AbstractRegistryFactory extends org.apache.dubbo.registry.support.AbstractRegistryFactory implements RegistryFactory {
+@Activate(order = 2) // Will take effect before ExcludedParamsFilter
+public class ExcludedParamsFilter2 implements MetadataParamsFilter {
 
     @Override
-    public com.alibaba.dubbo.registry.Registry getRegistry(com.alibaba.dubbo.common.URL url) {
-        return (com.alibaba.dubbo.registry.Registry)super.getRegistry(url.getOriginalURL());
+    public String[] serviceParamsIncluded() {
+        return new String[0];
     }
 
-    protected abstract com.alibaba.dubbo.registry.Registry createRegistry(com.alibaba.dubbo.common.URL url);
+    @Override
+    public String[] serviceParamsExcluded() {
+        return new String[]{DEPRECATED_KEY, SIDE_KEY};
+    }
+
+    /**
+     * Not included in this test
+     */
+    @Override
+    public String[] instanceParamsIncluded() {
+        return new String[0];
+    }
 
     @Override
-    protected Registry createRegistry(URL url) {
-        return createRegistry(new com.alibaba.dubbo.common.URL(url));
+    public String[] instanceParamsExcluded() {
+        return new String[0];
     }
 }
