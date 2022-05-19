@@ -17,13 +17,16 @@
 dubbo:
   application:
     name: dubbo-springboot-demo-provider
+    register-mode: instance
+    metadata-service-protocol: tri
+    metadata-service-port: 20082
   protocol:
-    name: dubbo
-    port: -1
+    name: tri
+    port: 20081
   registry:
     id: zk-registry
-    address: zookeeper://127.0.0.1:2181
+    address: nacos://127.0.0.1:8848
   config-center:
-    address: zookeeper://127.0.0.1:2181
+    address: nacos://127.0.0.1:8848
   metadata-report:
-    address: zookeeper://127.0.0.1:2181
+    address: nacos://127.0.0.1:8848
